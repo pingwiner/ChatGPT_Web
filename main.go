@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"encoding/json"		
 	openai "github.com/sashabaranov/go-openai"
+	"github.com/sevlyar/go-daemon"
+	"log"
 )
 
 type RequestBody struct {
@@ -103,13 +105,36 @@ func chat(writer http.ResponseWriter, r *http.Request) {
 
 
 func main() {
+	cntxt := &daemon.Context{
+		PidFileName: "chatgpt_web.pid",
+		PidFilePerm: 0644,
+		LogFileName: "chatgpt_web.log",
+		LogFilePerm: 0640,
+		WorkDir:     "./",
+		Umask:       027,
+		Args:        []string{"[go-daemon chatgpt_web]"},
+	}
+
+
+	d, err := cntxt.Reborn()
+	if err != nil {
+		log.Fatal("Unable to run: ", err)
+	}
+	if d != nil {
+		return
+	}
+	defer cntxt.Release()
+
+	log.Print("- - - - - - - - - - - - - - -")
+	log.Print("daemon started")
+
 	Init()
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 
 	http.HandleFunc("/chat", chat)
 
-	err := http.ListenAndServe(":8081", nil)
+	err = http.ListenAndServe(":8081", nil)
 
 	if errors.Is(err, http.ErrServerClosed) {
 		fmt.Printf("server closed\n")
